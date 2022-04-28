@@ -15,18 +15,30 @@ class datapk():
 
 # role = "HOST"
 # role = "SLAVE"
-# HOST_ADDR = input("please enter HOST Address:")
-HOST_ADDR = "192.168.1.78"
+HOST_ADDR = input("please enter HOST Address:")
 # HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 
 def getkey(data,kew) -> str:
     if data.find(kew)+len(kew) < data.rfind("\n"):
         return data[data.find(kew)+len(kew):data.rfind("\n")]
     return data[data.find(kew)+len(kew):]
-try:
+
+if(HOST_ADDR != ""):
     print("slave mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sfast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect((HOST_ADDR, 12345))
+    sfast.bind(("127.0.0.1", "5005"))
+
+    def mouseMove():
+        while 1:
+            data, addr = sfast.recvfrom(64) # buffer size is 1024 bytes
+            (x,y) = data.decode("ascii").split(" ")
+            mouse.move(x,y)
+    
+    x = threading.Thread(target=mouseMove, args=(), daemon=True)
+    x.start()
+
     while 1:
         data = s.recv(64).decode("ascii")
         # print("get",data) 
@@ -50,9 +62,9 @@ try:
             elif "M2 " in data:
                 key = getkey(data,"M2 ")
                 mouse.press(key)
-            elif "M3 " in data:
-                key = getkey(data,"M3 ").split(" ")
-                mouse.move(key[0],key[1])
+            # elif "M3 " in data:
+            #     key = getkey(data,"M3 ").split(" ")
+            #     mouse.move(key[0],key[1])
             elif "M4 " in data:
                 key = getkey(data,"M4 ")
                 mouse.wheel(float(key))
@@ -62,12 +74,15 @@ try:
             # print("corrupted package",bytearray(data.encode()))
             pass
 
-except:
+else:
+    HOST_ADDR = "127.0.0.1"
     print("host mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sfast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((HOST_ADDR, 12345))
     s.listen(10)
     cL = []
+    adrL = []
     global lastsend
     global exit
     exit = False
@@ -100,9 +115,13 @@ except:
 
         elif isinstance(event, mouse.MoveEvent):
             # mouse.move_to(event.x, event.y) #M3
-            if(time() - lastsend > 0.05):
+            if(time() - lastsend > 0.01):
                 sendpkg="M3 " + str(event.x) + " " + str(event.y) + "\n"
                 lastsend = time() 
+
+                for addr in adrL:
+                    sfast.sendto(bytearray(sendpkg.encode()), (addr, "5005"))
+                return 
             else:
                 return
 
@@ -127,6 +146,7 @@ except:
             c, addr = s.accept()
             print('{} connected.'.format(addr))
             cL.append(c)
+            adrL.append(addr)
         
     x = threading.Thread(target=loop, args=(), daemon=True)
     x.start()
