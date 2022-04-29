@@ -1,4 +1,4 @@
-import mouse
+import mousejklertdcvcv 
 import keyboard
 import socket
 from time import sleep, time
@@ -23,12 +23,12 @@ def getkey(data,kew) -> str:
         return data[data.find(kew)+len(kew):data.rfind("\n")]
     return data[data.find(kew)+len(kew):]
 
-if(HOST_ADDR != ""):
+try:
     print("slave mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sfast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.connect((HOST_ADDR, 12345))
-    sfast.bind(("127.0.0.1", "5005"))
+    sfast.bind(("", 5005))
 
     def mouseMove():
         while 1:
@@ -74,12 +74,13 @@ if(HOST_ADDR != ""):
             # print("corrupted package",bytearray(data.encode()))
             pass
 
-else:
-    HOST_ADDR = "127.0.0.1"
+except:
     print("host mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sfast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind((HOST_ADDR, 12345))
+    sfast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # sfast.bind(("0.0.0.0", 5005))
+
     s.listen(10)
     cL = []
     adrL = []
@@ -118,9 +119,9 @@ else:
             if(time() - lastsend > 0.01):
                 sendpkg="M3 " + str(event.x) + " " + str(event.y) + "\n"
                 lastsend = time() 
-
+                MESSAGE = bytearray(sendpkg.encode())
                 for addr in adrL:
-                    sfast.sendto(bytearray(sendpkg.encode()), (addr, "5005"))
+                    sfast.sendto(MESSAGE, (str(addr), 5005))
                 return 
             else:
                 return
