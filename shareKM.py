@@ -15,8 +15,10 @@ class datapk():
 
 # role = "HOST"
 # role = "SLAVE"
-# HOST_ADDR = input("please enter HOST Address:")
-HOST_ADDR = "192.168.1.78"
+HOST_ADDR = input("please enter HOST Address:")
+print("PRESS F5 to exit")
+
+# HOST_ADDR = "192.168.1.78"
 # HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 
 def getkey(data,kew) -> str:
@@ -27,47 +29,83 @@ try:
     print("slave mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((HOST_ADDR, 12345))
-    while 1:
-        data = s.recv(64).decode("ascii")
-        # print("get",data) 
-        try: 
-            if "K1 " in data:
-                key = int(data[data.find("K1 ")+3:data.rfind("\n")])
-                # print("press",key)
-                #debug only, can remove in product 
-                if not keyboard.is_pressed(key):
-                    keyboard.press(key)
+    smm = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    smm.connect((HOST_ADDR, 12346))
 
-            elif "K2 " in data:
-                key = int(getkey(data,"K2 "))
-                # print("release",key)
-                if keyboard.is_pressed(key):
-                    keyboard.release(key)
+    def keycontrol():
+        last_mouse_press = 0
+        last_keyboard_press = 0
+        while 1:
+            data = s.recv(64).decode("ascii")
+            # print("get",data) 
+            try: 
+                if "K1 " in data:
+                    key = int(data[data.find("K1 ")+3:data.rfind("\n")])
+                    # print("press",key)
+                    #debug only, can remove in product 
+                    if(last_keyboard_press > 0):
+                        keyboard.release(key)
+                        last_keyboard_press = key
 
-            elif "M1 " in data:
-                key = getkey(data,"M1 ")
-                mouse.release(key)
-            elif "M2 " in data:
-                key = getkey(data,"M2 ")
-                mouse.press(key)
-            elif "M3 " in data:
-                key = getkey(data,"M3 ").split(" ")
+                    if not keyboard.is_pressed(key):
+                        keyboard.press(key)
+
+                elif "K2 " in data:
+                    key = int(getkey(data,"K2 "))
+                    # print("release",key)
+                    last_keyboard_press = -1
+                    if keyboard.is_pressed(key):
+                        keyboard.release(key)
+
+                elif "M1 " in data:
+                    key = getkey(data,"M1 ")
+                    last_mouse_press = -1
+                    mouse.release(key)
+                elif "M2 " in data:
+                    key = getkey(data,"M2 ")
+                    if(last_mouse_press > 0):
+                        mouse.release(key)
+                        last_mouse_press = key
+                    mouse.press(key)
+                # elif "M3 " in data:
+                #     key = getkey(data,"M3 ").split(" ")
+                #     mouse.move(key[0],key[1])
+                elif "M4 " in data:
+                    key = getkey(data,"M4 ")
+                    mouse.wheel(float(key))
+
+                # print("success run",bytearray(data.encode())) 
+            except:
+                # print("corrupted package",bytearray(data.encode()))
+                pass
+            
+    def mousecontrol():
+        while 1:
+            data = smm.recv(64).decode("ascii")
+            key = data.split(" ")
+            try: 
                 mouse.move(key[0],key[1])
-            elif "M4 " in data:
-                key = getkey(data,"M4 ")
-                mouse.wheel(float(key))
+            except:
+                pass
+            
+    x = threading.Thread(target=keycontrol, args=(), daemon=True)
+    x.start()
+    x = threading.Thread(target=mousecontrol, args=(), daemon=True)
+    x.start()
 
-            # print("success run",bytearray(data.encode())) 
-        except:
-            # print("corrupted package",bytearray(data.encode()))
-            pass
+    
+    keyboard.wait("F5")
 
 except:
     print("host mode")
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST_ADDR, 12345))
+    smm = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    smm.bind((HOST_ADDR, 12346))
     s.listen(10)
+    smm.listen(10)
     cL = []
+    cLmm = []
     global lastsend
     global exit
     exit = False
@@ -99,10 +137,20 @@ except:
                 sendpkg="M2 " + str(event.button) + "\n"
 
         elif isinstance(event, mouse.MoveEvent):
-            # mouse.move_to(event.x, event.y) #M3
+
+            # mouse.move(0, 0) #M3
+
             if(time() - lastsend > 0.05):
-                sendpkg="M3 " + str(event.x) + " " + str(event.y) + "\n"
+                sendpkg="" + str(event.x) + " " + str(event.y) + "\n"
                 lastsend = time() 
+
+                try:
+                    pkg = bytearray(sendpkg.encode())
+                    for c in cLmm:
+                        c.sendall(pkg)
+                except:
+                    pass
+    
             else:
                 return
 
@@ -127,8 +175,16 @@ except:
             c, addr = s.accept()
             print('{} connected.'.format(addr))
             cL.append(c)
+    
+    def loop2():
+        while(1):
+            c, addr = smm.accept()
+            print('{} connected.'.format(addr))
+            cLmm.append(c)
         
     x = threading.Thread(target=loop, args=(), daemon=True)
+    x.start()
+    x = threading.Thread(target=loop2, args=(), daemon=True)
     x.start()
 
     def getkeys():
